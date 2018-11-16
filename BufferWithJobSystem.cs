@@ -4,6 +4,7 @@
 // https://github.com/Unity-Technologies/EntityComponentSystemSamples
 // Or own bootstrap.
 // Just copy this script to the project
+// Based on RotationSpeedRotation
 
 // 2018.11.16
 
@@ -39,7 +40,7 @@ namespace ECS.Test
     public class BufferWithJobSystem : JobComponentSystem
     {
         [BurstCompile]
-        struct RotationSpeedRotation : IJobProcessComponentDataWithEntity <Instance>
+        struct Job : IJobProcessComponentDataWithEntity <Instance>
         {
             public float dt;
 
@@ -71,7 +72,7 @@ namespace ECS.Test
 
         protected override JobHandle OnUpdate(JobHandle inputDeps)
         {
-            var job = new RotationSpeedRotation () {
+            var job = new Job () {
                 dt = Time.deltaTime,
                 someBufferElement = GetBufferFromEntity <SomeBufferElement> (false)
                 
