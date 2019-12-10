@@ -1,8 +1,10 @@
 Unity DOTS-ECS very simple example with IJobForEachWithEntity, IJobForEach_BC and IBufferElementData.
  
-2019.12.10
+Updated 2019.12.10
+
 
 Requires Unity 2020.1.0a15+
+
 
 Tested with
 
