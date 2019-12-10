@@ -1,32 +1,21 @@
-// Unity ECS very simple example with IJobProcessComponentDataWithEntity and IBufferElementData.
+// Unity ECS very simple example with IJobForEachWithEntity, IJobForEach_BC and IBufferElementData.
  
-// Requires official Unity samples
-// https://github.com/Unity-Technologies/EntityComponentSystemSamples
-// Or own bootstrap.
-// Just copy this script to the project
-// Based on SimpleRotation / RotationSpeedSystem.cs
+// 2019.12.10
  
-// 2018.11.16
- 
-// Tested with
-// Entities 0.0.12-preview 12
-// Burst 0.2.4-preview.37
-// IncrementalCompiler 0.0.42-preview.24
-// Jobs 0.0.7-Preview.5
-// Mathematics 0.0.12.preview.19
- 
-// Entities 0.0.12-preview 20 will require replacement of 
-// protected override void OnCreateManager ( int capacity )
-// to 
-// protected override void OnCreateManager ( )
+// Requires Unity 2020.1+
 
-using Unity.Collections;
-using Unity.Entities;
-using Unity.Jobs;
-using Unity.Burst;
-// using Unity.Mathematics;
-// using Unity.Transforms;
-using UnityEngine;
+// Tested with
+// Entities 0.1.1-preview
+// Burst 1.1.2-preview
+// Jobs 0.1.1-Preview
+// Mathematics 1.1.0.preview.1
+ 
+using Unity.Collections ;
+using Unity.Entities ;
+using Unity.Jobs ;
+using Unity.Burst ; // See commented out [BurstCompile] lines, above jobs.
+
+using UnityEngine ;
  
 namespace ECS.Test
 {
@@ -34,62 +23,30 @@ namespace ECS.Test
     struct Instance : IComponentData
     {
         public float f ;
-        // public DynamicBuffer <int> db_a ;
     }
  
+    // For testing in Job_BC
     struct SomeBufferElement : IBufferElementData
+    {
+        public int i ;
+    }
+
+    // For testing in JobWithEntity
+    struct SomeFromEntityBufferElement : IBufferElementData
     {
         public int i ;
     }
  
     public class BufferWithJobSystem : JobComponentSystem
     {
-        [BurstCompile]
-        [RequireComponentTag ( typeof (SomeBufferElement ) ) ]
-        struct Job: IJobProcessComponentDataWithEntity <Instance>
+        
+        // protected override void OnCreateManager ( int capacity ) // Obsolete
+        protected override void OnCreate ( )
         {
-            public float dt;
- 
-            // Allow buffer read write in parralel jobs
-            // Ensure, no two jobs can write to same entity, at the same time.
-            // !! "You are somehow completely certain that there is no race condition possible here, because you are absolutely certain that you will not be writing to the same Entity ID multiple times from your parallel for job. (If you do thats a race condition and you can easily crash unity, overwrite memory etc) If you are indeed certain and ready to take the risks.
-            // https://forum.unity.com/threads/how-can-i-improve-or-jobify-this-system-building-a-list.547324/#post-3614833
-            [NativeDisableParallelForRestriction]
-            public BufferFromEntity <SomeBufferElement> someBufferElement ;
- 
-            public void Execute( Entity entity, int index, ref Instance tester )
-            {
-                tester.f = 10 * dt ;
- 
-                DynamicBuffer <SomeBufferElement> someDynamicBuffer = someBufferElement [entity] ;
- 
-                SomeBufferElement buffer = someDynamicBuffer [0] ;
- 
-                // Uncomment as needed
-                // buffer.i = 99 ;
- 
-                // someDynamicBuffer [0] = buffer ;
- 
-                // Debug Will throw errors in Job system
-                // Debug.Log ( "#" + index + "; " + someDynamicBuffer [0].i + "; " + someDynamicBuffer [1].i ) ;
- 
-            }
-        }
- 
-        protected override JobHandle OnUpdate(JobHandle inputDeps)
-        {
-            var job = new Job () {
-                dt = Time.deltaTime,
-                someBufferElement = GetBufferFromEntity <SomeBufferElement> (false)
-         
-                } ;
-            return job.Schedule(this, inputDeps) ;
-        }
- 
-        // protected override void OnCreateManager ( ) // for Entities 0.0.12 preview 20
-        protected override void OnCreateManager ( int capacity )
-        {
-            base.OnCreateManager ( capacity );
+            base.OnCreate ( ) ;
+
+            Debug.LogWarning ( "Burst is disabled, to use Debug.Log in jobs." ) ;
+            Debug.LogWarning ( "Jobs are executed every second." ) ;
  
             Instance instance = new Instance () ;
  
@@ -97,15 +54,127 @@ namespace ECS.Test
      
             EntityManager.SetComponentData ( entity, instance ) ;
             EntityManager.AddBuffer <SomeBufferElement> ( entity ) ;
- 
-            var bufferFromEntity = EntityManager.GetBufferFromEntity <SomeBufferElement> ();
-            var buffer = bufferFromEntity [entity];
- 
+  
+            DynamicBuffer <SomeBufferElement> someBuffer = EntityManager.GetBuffer <SomeBufferElement> ( entity ) ;
+
+            // Add two elements to dynamic buffer.
             SomeBufferElement someBufferElement = new SomeBufferElement () ;
-            someBufferElement.i = 6 ;
-            buffer.Add ( someBufferElement ) ;
-            someBufferElement.i = 7 ;
-            buffer.Add ( someBufferElement ) ;
+            someBufferElement.i = 100000 ;
+            someBuffer.Add ( someBufferElement ) ;
+            someBufferElement.i = 200000 ;
+            someBuffer.Add ( someBufferElement ) ;
+
+            EntityManager.Instantiate ( entity ) ; // Clone entity.
+
+            
+            entity = EntityManager.CreateEntity ( typeof (Instance) ) ;
+     
+            EntityManager.SetComponentData ( entity, instance ) ;
+            EntityManager.AddBuffer <SomeFromEntityBufferElement> ( entity ) ;
+
+            DynamicBuffer <SomeFromEntityBufferElement> someFromEntityBuffer = EntityManager.GetBuffer <SomeFromEntityBufferElement> ( entity ) ;
+
+            // Add two elements to dynamic buffer.
+            SomeFromEntityBufferElement someFromEntityBufferElement = new SomeFromEntityBufferElement () ;
+            someFromEntityBufferElement.i = 1000 ;
+            someFromEntityBuffer.Add ( someFromEntityBufferElement ) ;
+            someFromEntityBufferElement.i = 10 ;
+            someFromEntityBuffer.Add ( someFromEntityBufferElement ) ;
+
+            EntityManager.Instantiate ( entity ) ; // Clone entity.
+
         }
+        
+        float previoudTime = 0 ;
+
+        protected override JobHandle OnUpdate ( JobHandle inputDeps )
+        {
+            
+            float time = Time.time ;
+
+            // Execute approx every second.
+            if ( time > previoudTime + 1 )
+            {
+                previoudTime = time ;                
+            }
+            else
+            {
+                return inputDeps ;
+            }
+
+            JobHandle job_withEntity = new Job_WithEntity () 
+            {
+                time = time,
+                someBuffer = GetBufferFromEntity <SomeFromEntityBufferElement> ( false ) // Read and write
+         
+            }.ScheduleSingle ( this, inputDeps ) ; // Using instead job.Schedule ( this, inputDeps ), for single threaded test and debug.
+            // }.Schedule ( this, inputDeps ) ; // Allow execute job in parallel, if there is enough entities.
+            
+            JobHandle job_BC = new Job_BC () 
+            {
+                time = time,
+                
+            }.ScheduleSingle ( this, job_withEntity ) ; // Using instead job.Schedule ( this, inputDeps ), for single threaded test and debug.
+            // }.Schedule ( this, jobWithEntity ) ; // Allow execute job in parallel, if there is enough entities.
+
+            return job_BC ;
+        }
+
+        // [BurstCompile] // Disbaled burst, as Debug.Log is used.
+        [RequireComponentTag ( typeof (SomeFromEntityBufferElement ) ) ]
+        // struct Job: IJobProcessComponentDataWithEntity <Instance> // Obsolete
+        struct Job_WithEntity : IJobForEachWithEntity <Instance>
+        {
+            public float time;
+ 
+            // Allow buffer read write in parralel jobs
+            // Ensure, no two jobs can write to same entity, at the same time.
+            // !! "You are somehow completely certain that there is no race condition possible here, because you are absolutely certain that you will not be writing to the same Entity ID multiple times from your parallel for job. (If you do thats a race condition and you can easily crash unity, overwrite memory etc) If you are indeed certain and ready to take the risks.
+            // https://forum.unity.com/threads/how-can-i-improve-or-jobify-this-system-building-a-list.547324/#post-3614833
+            [NativeDisableParallelForRestriction]
+            public BufferFromEntity <SomeFromEntityBufferElement> someBuffer ;
+ 
+            public void Execute( Entity entity, int index, ref Instance tester )
+            {
+                tester.f = time ;
+ 
+                DynamicBuffer <SomeFromEntityBufferElement> dynamicBuffer = someBuffer [entity] ;
+ 
+                SomeFromEntityBufferElement bufferElement = dynamicBuffer [0] ; 
+                bufferElement.i ++ ; // Increment.
+                dynamicBuffer [0] = bufferElement ; // Set back.
+                
+                // Console will throw error when using debug and burst is enabled.
+                // Comment out Debug, when using burst.
+                Debug.Log ( "T: " + tester.f + " IJobForEachWIthEntity " + " #" + index + "; entity: " + entity + "; " + dynamicBuffer [0].i + "; " + dynamicBuffer [1].i ) ;
+ 
+            }
+
+        }
+ 
+        // [BurstCompile] // Disbaled burst, as Debug.Log is used.
+        struct Job_BC : IJobForEach_BC <SomeBufferElement, Instance>
+        {
+            public float time;
+ 
+            // Allow buffer read write in parralel jobs
+            // Ensure, no two jobs can write to same entity, at the same time.
+            public void Execute( DynamicBuffer <SomeBufferElement> dynamicBuffer, ref Instance tester )
+            {
+                tester.f = time ;
+ 
+ 
+                SomeBufferElement bufferElement = dynamicBuffer [0] ;
+                bufferElement.i ++ ; // Increment.
+                dynamicBuffer [0] = bufferElement ; // Set back.
+                
+                // Console will throw error when using debug and burst is enabled.
+                // Comment out Debug, when using burst.
+                Debug.Log ( "T: " + tester.f + " IJobForEach_BC (Buffer, Component) " + "; "  + dynamicBuffer [0].i + "; " + dynamicBuffer [1].i ) ;
+ 
+            }
+
+        }
+
     }
 }
