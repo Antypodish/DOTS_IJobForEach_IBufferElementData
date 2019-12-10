@@ -2,12 +2,13 @@
  
 // 2019.12.10
  
-// Requires Unity 2020.1+
+// Requires Unity 2020.1.0a15+
 
 // Tested with
-// Entities 0.1.1-preview
-// Burst 1.1.2-preview
-// Jobs 0.1.1-Preview
+// Burst 1.2.0-preview.10
+// Collections 0.2.0-Preview.13
+// Entities 0.2.0-preview.18
+// Jobs 0.2.1-Preview.3
 // Mathematics 1.1.0.preview.1
  
 using Unity.Collections ;
@@ -46,7 +47,7 @@ namespace ECS.Test
             base.OnCreate ( ) ;
 
             Debug.LogWarning ( "Burst is disabled, to use Debug.Log in jobs." ) ;
-            Debug.LogWarning ( "Jobs are executed every second." ) ;
+            Debug.LogWarning ( "Jobs are executed approx every second." ) ;
  
             Instance instance = new Instance () ;
  
