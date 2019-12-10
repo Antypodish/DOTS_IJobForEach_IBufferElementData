@@ -19,4 +19,5 @@ Jobs 0.2.1-Preview.3
 Mathematics 1.1.0.preview.1
 
 See official discussion
-https://forum.unity.com/threads/example-ijobforeach-and-ibufferelementdata-unity-2020-1.584548/#post-5266713
+
+https://forum.unity.com/threads/example-ijobforeach-and-ibufferelementdata-unity-2020-1.584548/
